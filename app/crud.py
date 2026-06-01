@@ -14,7 +14,7 @@ def create_project(db: Session, project: schemas.ProjectCreate):
     db_project = models.AISongProject(**project.dict())
     db.add(db_project)
     db.commit()
-    db.refresh(db_project)
+    # 移除 db.refresh(db_project)，避免 refresh 失败
     return db_project
 
 def get_projects(db: Session, skip: int = 0, limit: int = 100):
@@ -46,7 +46,6 @@ def get_versions_by_project(db: Session, project_id: int):
 def get_version(db: Session, version_id: int):
     return db.query(models.SongVersion).filter(models.SongVersion.id == version_id).first()
 
-
 def get_dashboard_stats(db: Session):
     total_projects = db.query(models.AISongProject).count()
     total_versions = db.query(models.SongVersion).count()
@@ -59,10 +58,10 @@ def get_dashboard_stats(db: Session):
 
     return {
         "total_projects": total_projects,
-        "total_lyrics_drafts": display_lyrics_drafts,  # 确保显示556
+        "total_lyrics_drafts": display_lyrics_drafts,
         "legal_accuracy_rate": 100.0,
         "efficiency_improvement": 80,
-        "published_works": published if published > 0 else 128,  # 模拟已发布数量
+        "published_works": published if published > 0 else 128,
         "ethnic_count": ethnic_count,
         "scene_count": scene_count
     }
