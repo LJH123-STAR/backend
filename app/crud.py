@@ -14,8 +14,8 @@ def create_project(db: Session, project: schemas.ProjectCreate):
     db_project = models.AISongProject(**project.dict())
     db.add(db_project)
     db.commit()
-    db.refresh(db_project)
-    # 返回 Pydantic 模型，避免 ORM 对象序列化问题
+    # 移除 db.refresh(db_project) 避免 refresh 错误
+    # 直接返回 Pydantic 模型，ORM 对象仍然可用
     return schemas.Project.model_validate(db_project)
 
 def get_projects(db: Session, skip: int = 0, limit: int = 100):
