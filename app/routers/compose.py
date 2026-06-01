@@ -13,13 +13,15 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.get("/ethnic-groups")
 def list_ethnic_groups(db: Session = Depends(get_db)):
-    groups = crud.get_ethnic_groups(db)  # 现在返回字典列表，每个字典有 id, ethnic_group, region 等
+    groups = crud.get_ethnic_groups(db)   # 返回字典列表
+    # 修改：使用字典键访问
     return [{"id": g["id"], "name": g["ethnic_group"], "region": g["region"]} for g in groups]
 
 
 @router.get("/legal-scenes")
 def list_legal_scenes(db: Session = Depends(get_db)):
-    scenes = crud.get_legal_scenes(db)  # 返回字典列表，每个字典有 id, scene_category, keywords 等
+    scenes = crud.get_legal_scenes(db)    # 返回字典列表
+    # 修改：使用字典键访问
     return [{"id": s["id"], "category": s["scene_category"], "keywords": s["keywords"]} for s in scenes]
 
 
@@ -38,9 +40,9 @@ async def upload_and_generate(
     # 2. 分析旋律特征（模拟）
     music_features = ai_service.analyze_uploaded_song(file_path, file.filename)
 
-    # 3. 获取法治场景名称（注意 get_legal_scene 应该也返回字典）
-    scene = crud.get_legal_scene(db, legal_scene_id)
-    scene_name = scene["scene_category"] if scene else "默认"
+    # 3. 获取法治场景名称（注意：crud.get_legal_scene 返回字典）
+    scene_dict = crud.get_legal_scene(db, legal_scene_id)
+    scene_name = scene_dict["scene_category"] if scene_dict else "默认"
 
     # 4. 调用AI填词
     ai_result = ai_service.compose_lyrics_by_melody(project_id, music_features, scene_name)
@@ -52,23 +54,23 @@ async def upload_and_generate(
     if not (legal_ok and rhythm_ok):
         raise HTTPException(status_code=400, detail=f"校验失败: {legal_msg} {rhythm_msg}")
 
-    # 6. 保存版本
-    version = crud.create_version(db, project_id, ai_result)
+    # 6. 保存版本（crud.create_version 返回字典，但我们只需要其中的 id）
+    version_dict = crud.create_version(db, project_id, ai_result)
 
-    # 7. 更新项目状态（注意 get_project 也应该返回字典，这里需要获取 ORM 对象来修改，或者直接更新）
-    # 由于 get_project 现在返回字典，无法直接 .ethnic_group 赋值，因此需要先查询 ORM 对象
-    # 简便方法：直接用 crud.update_project_status 或重新查询 ORM
+    # 7. 更新项目状态（注意：crud.get_project 返回字典，不能直接修改属性，需要通过 ORM 对象）
+    # 方案：直接使用 ORM 查询更新
     from app import models
-    project_orm = db.query(models.AISongProject).filter(models.AISongProject.id == project_id).first()
-    if project_orm:
-        project_orm.ethnic_group = "依曲填词"
-        project_orm.status = "ai_generated"
+    orm_project = db.query(models.AISongProject).filter(models.AISongProject.id == project_id).first()
+    if orm_project:
+        orm_project.ethnic_group = "依曲填词"
+        orm_project.status = "ai_generated"
         db.commit()
+        db.refresh(orm_project)
 
     return schemas.GenerateResponse(
         success=True,
-        version_id=version.id,
+        version_id=version_dict["id"],
         lyrics=ai_result["lyrics_text"],
-        audio_url=ai_result["audio_url"],
+        audio_url=ai_result.get("audio_url"),
         message="依曲填词完成，已通过法理+韵律双重校准"
     )
