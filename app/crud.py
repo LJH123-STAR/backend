@@ -13,12 +13,18 @@ def get_legal_scene(db: Session, scene_id: int):
 def create_project(db: Session, project: schemas.ProjectCreate):
     db_project = models.AISongProject(**project.dict())
     db.add(db_project)
-    db.flush()          # 刷新以获取数据库生成的自增 ID（但事务未提交）
-    project_id = db_project.id  # 此时 id 已可用
-    db.commit()         # 正式提交事务
-    # 重新查询对象，确保其处于当前 session 中
-    created_project = db.query(models.AISongProject).filter(models.AISongProject.id == project_id).first()
-    return schemas.Project.model_validate(created_project)
+    db.commit()
+    # 手动构造 Pydantic 模型，避免 ORM 对象序列化问题
+    return schemas.Project(
+        id=db_project.id,
+        project_name=db_project.project_name,
+        ethnic_group=db_project.ethnic_group,
+        legal_scene_id=db_project.legal_scene_id,
+        status=db_project.status,
+        created_by=db_project.created_by,
+        created_at=db_project.created_at,
+        updated_at=db_project.updated_at,
+    )
 
 def get_projects(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.AISongProject).order_by(models.AISongProject.created_at.desc()).offset(skip).limit(limit).all()
