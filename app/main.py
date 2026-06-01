@@ -10,7 +10,11 @@ app = FastAPI(title="AI双语法理编曲系统", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:8080"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:8080",
+        "https://frontend-lovat-nu-26.vercel.app"   # 添加你的前端域名
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
