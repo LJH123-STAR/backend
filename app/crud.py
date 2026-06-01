@@ -13,8 +13,7 @@ def get_legal_scene(db: Session, scene_id: int):
 def create_project(db: Session, project: schemas.ProjectCreate):
     db_project = models.AISongProject(**project.dict())
     db.add(db_project)
-    db.flush()                     # 刷新到数据库，获得 id 等字段
-    # 从 db_project 中提取属性值（此时对象仍在 session 中）
+    db.flush()
     project_data = {
         "id": db_project.id,
         "project_name": db_project.project_name,
@@ -25,22 +24,50 @@ def create_project(db: Session, project: schemas.ProjectCreate):
         "created_at": db_project.created_at,
         "updated_at": db_project.updated_at,
     }
-    db.commit()                    # 正式提交事务
-    return project_data            # 返回字典，FastAPI 自动序列化为 JSON
+    db.commit()
+    return project_data
 
 def get_projects(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(models.AISongProject).order_by(models.AISongProject.created_at.desc()).offset(skip).limit(limit).all()
+    projects = db.query(models.AISongProject).order_by(models.AISongProject.created_at.desc()).offset(skip).limit(limit).all()
+    return [
+        {
+            "id": p.id,
+            "project_name": p.project_name,
+            "ethnic_group": p.ethnic_group,
+            "legal_scene_id": p.legal_scene_id,
+            "status": p.status,
+            "created_by": p.created_by,
+            "created_at": p.created_at,
+            "updated_at": p.updated_at,
+        }
+        for p in projects
+    ]
 
 def get_project(db: Session, project_id: int):
-    return db.query(models.AISongProject).filter(models.AISongProject.id == project_id).first()
+    project = db.query(models.AISongProject).filter(models.AISongProject.id == project_id).first()
+    if project:
+        return {
+            "id": project.id,
+            "project_name": project.project_name,
+            "ethnic_group": project.ethnic_group,
+            "legal_scene_id": project.legal_scene_id,
+            "status": project.status,
+            "created_by": project.created_by,
+            "created_at": project.created_at,
+            "updated_at": project.updated_at,
+        }
+    return None
 
 def update_project_status(db: Session, project_id: int, status: str):
     project = get_project(db, project_id)
     if project:
-        project.status = status
-        db.commit()
-        db.refresh(project)
-    return project
+        # project 现在是字典，不能直接修改属性，需要重新查询 ORM 对象
+        orm_project = db.query(models.AISongProject).filter(models.AISongProject.id == project_id).first()
+        if orm_project:
+            orm_project.status = status
+            db.commit()
+            db.refresh(orm_project)
+    return get_project(db, project_id)  # 返回更新后的字典
 
 def create_version(db: Session, project_id: int, version_data: dict):
     max_version = db.query(models.SongVersion).filter(models.SongVersion.project_id == project_id).count()
