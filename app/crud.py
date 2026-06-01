@@ -13,22 +13,20 @@ def get_legal_scene(db: Session, scene_id: int):
 def create_project(db: Session, project: schemas.ProjectCreate):
     db_project = models.AISongProject(**project.dict())
     db.add(db_project)
-    db.flush()                    # 刷新到数据库但不提交，此时 id 已被数据库赋值
-    project_id = db_project.id    # 安全获取自增 id
-    db.commit()                   # 提交事务
-    # 重新查询对象，确保处于当前 session 中
-    created_project = db.query(models.AISongProject).filter(models.AISongProject.id == project_id).first()
-    # 手动构造 Pydantic 对象返回（避免任何延迟加载问题）
-    return schemas.Project(
-        id=created_project.id,
-        project_name=created_project.project_name,
-        ethnic_group=created_project.ethnic_group,
-        legal_scene_id=created_project.legal_scene_id,
-        status=created_project.status,
-        created_by=created_project.created_by,
-        created_at=created_project.created_at,
-        updated_at=created_project.updated_at,
-    )
+    db.flush()                     # 刷新到数据库，获得 id 等字段
+    # 从 db_project 中提取属性值（此时对象仍在 session 中）
+    project_data = {
+        "id": db_project.id,
+        "project_name": db_project.project_name,
+        "ethnic_group": db_project.ethnic_group,
+        "legal_scene_id": db_project.legal_scene_id,
+        "status": db_project.status,
+        "created_by": db_project.created_by,
+        "created_at": db_project.created_at,
+        "updated_at": db_project.updated_at,
+    }
+    db.commit()                    # 正式提交事务
+    return project_data            # 返回字典，FastAPI 自动序列化为 JSON
 
 def get_projects(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.AISongProject).order_by(models.AISongProject.created_at.desc()).offset(skip).limit(limit).all()
