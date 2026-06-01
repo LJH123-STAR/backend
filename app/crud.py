@@ -13,9 +13,11 @@ def get_legal_scene(db: Session, scene_id: int):
 def create_project(db: Session, project: schemas.ProjectCreate):
     db_project = models.AISongProject(**project.dict())
     db.add(db_project)
-    db.commit()
+    db.flush()          # 刷新以获取数据库生成的自增 ID（但事务未提交）
+    project_id = db_project.id  # 此时 id 已可用
+    db.commit()         # 正式提交事务
     # 重新查询对象，确保其处于当前 session 中
-    created_project = db.query(models.AISongProject).filter(models.AISongProject.id == db_project.id).first()
+    created_project = db.query(models.AISongProject).filter(models.AISongProject.id == project_id).first()
     return schemas.Project.model_validate(created_project)
 
 def get_projects(db: Session, skip: int = 0, limit: int = 100):
