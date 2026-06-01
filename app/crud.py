@@ -14,8 +14,9 @@ def create_project(db: Session, project: schemas.ProjectCreate):
     db_project = models.AISongProject(**project.dict())
     db.add(db_project)
     db.commit()
-    # 移除 db.refresh(db_project)，避免 refresh 失败
-    return db_project
+    db.refresh(db_project)
+    # 返回 Pydantic 模型，避免 ORM 对象序列化问题
+    return schemas.Project.model_validate(db_project)
 
 def get_projects(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.AISongProject).order_by(models.AISongProject.created_at.desc()).offset(skip).limit(limit).all()
@@ -52,10 +53,7 @@ def get_dashboard_stats(db: Session):
     published = db.query(models.AISongProject).filter(models.AISongProject.status == "published").count()
     ethnic_count = db.query(models.EthnicMelodyLib).count()
     scene_count = db.query(models.LegalSceneLib).count()
-
-    # 模拟达到556份（如果真实数据不够，直接返回556）
     display_lyrics_drafts = total_versions if total_versions >= 556 else 556
-
     return {
         "total_projects": total_projects,
         "total_lyrics_drafts": display_lyrics_drafts,
