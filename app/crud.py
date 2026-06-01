@@ -1,31 +1,40 @@
 from sqlalchemy.orm import Session
 from app import models, schemas
+from sqlalchemy import insert
 
 def get_ethnic_groups(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(models.EthnicMelodyLib).offset(skip).limit(limit).all()
+    items = db.query(models.EthnicMelodyLib).offset(skip).limit(limit).all()
+    return [{"id": i.id, "ethnic_group": i.ethnic_group, "region": i.region, "rhythm_pattern": i.rhythm_pattern, "scale_mode": i.scale_mode, "typical_song": i.typical_song, "feature_description": i.feature_description, "created_at": i.created_at} for i in items]
 
 def get_legal_scenes(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(models.LegalSceneLib).offset(skip).limit(limit).all()
+    items = db.query(models.LegalSceneLib).offset(skip).limit(limit).all()
+    return [{"id": i.id, "scene_category": i.scene_category, "sub_category": i.sub_category, "keywords": i.keywords, "legal_basis": i.legal_basis, "created_at": i.created_at} for i in items]
 
 def get_legal_scene(db: Session, scene_id: int):
-    return db.query(models.LegalSceneLib).filter(models.LegalSceneLib.id == scene_id).first()
+    item = db.query(models.LegalSceneLib).filter(models.LegalSceneLib.id == scene_id).first()
+    if item:
+        return {"id": item.id, "scene_category": item.scene_category, "sub_category": item.sub_category, "keywords": item.keywords, "legal_basis": item.legal_basis, "created_at": item.created_at}
+    return None
 
 def create_project(db: Session, project: schemas.ProjectCreate):
-    db_project = models.AISongProject(**project.dict())
-    db.add(db_project)
-    db.flush()
-    project_data = {
-        "id": db_project.id,
-        "project_name": db_project.project_name,
-        "ethnic_group": db_project.ethnic_group,
-        "legal_scene_id": db_project.legal_scene_id,
-        "status": db_project.status,
-        "created_by": db_project.created_by,
-        "created_at": db_project.created_at,
-        "updated_at": db_project.updated_at,
-    }
+    # 使用 Core 插入并返回自增 ID
+    table = models.AISongProject.__table__
+    stmt = insert(table).values(**project.dict()).returning(table.c.id)
+    result = db.execute(stmt)
+    project_id = result.scalar_one()
     db.commit()
-    return project_data
+    # 重新查询完整记录
+    new_project = db.query(models.AISongProject).filter(models.AISongProject.id == project_id).first()
+    return {
+        "id": new_project.id,
+        "project_name": new_project.project_name,
+        "ethnic_group": new_project.ethnic_group,
+        "legal_scene_id": new_project.legal_scene_id,
+        "status": new_project.status,
+        "created_by": new_project.created_by,
+        "created_at": new_project.created_at,
+        "updated_at": new_project.updated_at,
+    }
 
 def get_projects(db: Session, skip: int = 0, limit: int = 100):
     projects = db.query(models.AISongProject).order_by(models.AISongProject.created_at.desc()).offset(skip).limit(limit).all()
@@ -59,15 +68,12 @@ def get_project(db: Session, project_id: int):
     return None
 
 def update_project_status(db: Session, project_id: int, status: str):
-    project = get_project(db, project_id)
-    if project:
-        # project 现在是字典，不能直接修改属性，需要重新查询 ORM 对象
-        orm_project = db.query(models.AISongProject).filter(models.AISongProject.id == project_id).first()
-        if orm_project:
-            orm_project.status = status
-            db.commit()
-            db.refresh(orm_project)
-    return get_project(db, project_id)  # 返回更新后的字典
+    orm_project = db.query(models.AISongProject).filter(models.AISongProject.id == project_id).first()
+    if orm_project:
+        orm_project.status = status
+        db.commit()
+        db.refresh(orm_project)
+    return get_project(db, project_id)
 
 def create_version(db: Session, project_id: int, version_data: dict):
     max_version = db.query(models.SongVersion).filter(models.SongVersion.project_id == project_id).count()
@@ -76,13 +82,47 @@ def create_version(db: Session, project_id: int, version_data: dict):
     db.add(db_version)
     db.commit()
     db.refresh(db_version)
-    return db_version
+    return {
+        "id": db_version.id,
+        "project_id": db_version.project_id,
+        "version_number": db_version.version_number,
+        "lyrics_text": db_version.lyrics_text,
+        "audio_url": db_version.audio_url,
+        "video_url": db_version.video_url,
+        "sheet_music_url": db_version.sheet_music_url,
+        "created_at": db_version.created_at,
+    }
 
 def get_versions_by_project(db: Session, project_id: int):
-    return db.query(models.SongVersion).filter(models.SongVersion.project_id == project_id).order_by(models.SongVersion.version_number).all()
+    versions = db.query(models.SongVersion).filter(models.SongVersion.project_id == project_id).order_by(models.SongVersion.version_number).all()
+    return [
+        {
+            "id": v.id,
+            "project_id": v.project_id,
+            "version_number": v.version_number,
+            "lyrics_text": v.lyrics_text,
+            "audio_url": v.audio_url,
+            "video_url": v.video_url,
+            "sheet_music_url": v.sheet_music_url,
+            "created_at": v.created_at,
+        }
+        for v in versions
+    ]
 
 def get_version(db: Session, version_id: int):
-    return db.query(models.SongVersion).filter(models.SongVersion.id == version_id).first()
+    v = db.query(models.SongVersion).filter(models.SongVersion.id == version_id).first()
+    if v:
+        return {
+            "id": v.id,
+            "project_id": v.project_id,
+            "version_number": v.version_number,
+            "lyrics_text": v.lyrics_text,
+            "audio_url": v.audio_url,
+            "video_url": v.video_url,
+            "sheet_music_url": v.sheet_music_url,
+            "created_at": v.created_at,
+        }
+    return None
 
 def get_dashboard_stats(db: Session):
     total_projects = db.query(models.AISongProject).count()
@@ -106,7 +146,27 @@ def create_review(db: Session, review: schemas.ReviewCreate):
     db.add(db_review)
     db.commit()
     db.refresh(db_review)
-    return db_review
+    return {
+        "id": db_review.id,
+        "version_id": db_review.version_id,
+        "reviewer_role": db_review.reviewer_role,
+        "reviewer_name": db_review.reviewer_name,
+        "review_comments": db_review.review_comments,
+        "review_status": db_review.review_status,
+        "reviewed_at": db_review.reviewed_at,
+    }
 
 def get_reviews_by_version(db: Session, version_id: int):
-    return db.query(models.ReviewRecord).filter(models.ReviewRecord.version_id == version_id).all()
+    reviews = db.query(models.ReviewRecord).filter(models.ReviewRecord.version_id == version_id).all()
+    return [
+        {
+            "id": r.id,
+            "version_id": r.version_id,
+            "reviewer_role": r.reviewer_role,
+            "reviewer_name": r.reviewer_name,
+            "review_comments": r.review_comments,
+            "review_status": r.review_status,
+            "reviewed_at": r.reviewed_at,
+        }
+        for r in reviews
+    ]
